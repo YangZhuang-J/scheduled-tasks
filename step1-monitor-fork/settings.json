@@ -1,5 +1,5 @@
 {
-  "start_date": "2026-11-10",
+  "start_date": "2026-10-01",
   "track": [
     {"index": "沪深300", "symbol": "sh000300", "config": "config-hs300.json"},
     {"index": "中证500", "symbol": "sh000905", "config": "config-zz500.json"}
