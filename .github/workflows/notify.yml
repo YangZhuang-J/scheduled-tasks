@@ -1,0 +1,27 @@
+name: PushPlus Notify
+
+on:
+  schedule:
+    # 每天北京时间 08:00 执行
+    # GitHub 用 UTC 时区，北京时间减 8 小时
+    - cron: '0 0 * * *'
+
+  # 允许手动运行（方便测试）
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install requests
+
+      - name: Send notification
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: python scripts/pushplus_notify.py
