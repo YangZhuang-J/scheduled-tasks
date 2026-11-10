@@ -1,0 +1,18 @@
+{
+  "name": "5档-金额变化",
+  "buy_states": [
+    {"range": [0, 20],  "freq": "monthly", "amount": 100},
+    {"range": [20, 40], "freq": "monthly", "amount": 80},
+    {"range": [40, 60], "freq": "monthly", "amount": 50},
+    {"range": [60, 80], "freq": "monthly", "amount": 10},
+    {"range": [80, 100], "freq": "monthly", "amount": 0}
+  ],
+  "sell": {
+    "min_valuation_pct": 70,
+    "ladder": [
+      {"profit": 20, "ratio": 0.25},
+      {"profit": 30, "ratio": 0.25},
+      {"profit": 50, "ratio": 0.5}
+    ]
+  }
+}

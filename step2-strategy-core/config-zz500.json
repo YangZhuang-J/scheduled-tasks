@@ -1,0 +1,17 @@
+{
+  "name": "中证500-标定推荐",
+  "window_months": 60,
+  "buy_states": [
+    {"range": [0, 40],  "freq": "weekly", "amount": 200},
+    {"range": [40, 80], "freq": "weekly", "amount": 100},
+    {"range": [80, 100], "freq": "weekly", "amount": 0}
+  ],
+  "sell": {
+    "min_valuation_pct": 80,
+    "ladder": [
+      {"profit": 30, "ratio": 0.33},
+      {"profit": 50, "ratio": 0.33},
+      {"profit": 80, "ratio": 0.34}
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "3档-频率变化",
+  "buy_states": [
+    {"range": [0, 33],  "freq": "daily",    "amount": 10},
+    {"range": [33, 67], "freq": "weekly",   "amount": 10},
+    {"range": [67, 100], "freq": "biweekly", "amount": 10}
+  ],
+  "sell": {
+    "min_valuation_pct": 70,
+    "ladder": [
+      {"profit": 20, "ratio": 0.25},
+      {"profit": 30, "ratio": 0.25},
+      {"profit": 50, "ratio": 0.5}
+    ]
+  }
+}

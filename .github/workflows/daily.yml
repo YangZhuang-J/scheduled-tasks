@@ -1,0 +1,38 @@
+name: daily-dca
+
+on:
+  schedule:
+    # 北京时间 18:30（UTC 10:30）周一~周五，收盘后数据已更新
+    - cron: "30 10 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install akshare
+
+      - name: 运行每日定投
+        working-directory: step1-monitor-fork
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: python daily.py
+
+      - name: 提交状态与日志
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add step1-monitor-fork/state.json step1-monitor-fork/trade_log.jsonl
+          git commit -m "chore: daily dca update" || echo "无变更"
+          git push

@@ -1,0 +1,185 @@
+{
+  "name": "gem-cash-pool-strategy",
+  "display_name": "同花顺创业板低估定投策略",
+  "category": "cash_pool",
+  "valuation_source": "pe_ttm_5y_pct",
+  "fund_thscode": "007664.OF",
+  "index_thscode": "399006.SZ",
+  "fund_name": "永赢创业板A",
+  "index_name": "创业板指",
+  "years": 5,
+  "initial_capital": 50000.0,
+  "weekly_base_amount": 1000.0,
+  "growth_rate": 0.07,
+  "cash_interest_rate": 0.014,
+  "trigger_percentile": 70.0,
+  "reset_percentile": 70,
+  "daily_redeem_ratio": 0.01,
+  "min_reinvest_multiple": 0.15,
+  "min_reinvest_cash_ratio": 0.15,
+  "extra_contribution_amount": 5000.0,
+  "extra_contribution_freq": "每月",
+  "weeks_per_year": 52,
+  "trading_days_per_week": 5,
+  "min_reinvest_pct_low": 70,
+  "min_reinvest_pct_high": 80,
+  "base_multiples": [
+    [
+      20,
+      3.5
+    ],
+    [
+      30,
+      2.5
+    ],
+    [
+      45,
+      1.0
+    ],
+    [
+      65,
+      0.5
+    ],
+    [
+      70,
+      0.25
+    ],
+    [
+      101,
+      0.0
+    ]
+  ],
+  "final_caps": [
+    [
+      20,
+      6.0
+    ],
+    [
+      30,
+      5.0
+    ],
+    [
+      45,
+      3.0
+    ],
+    [
+      65,
+      1.5
+    ],
+    [
+      80,
+      0.5
+    ],
+    [
+      101,
+      0.0
+    ]
+  ],
+  "acceleration": [
+    [
+      10,
+      1.0
+    ],
+    [
+      15,
+      1.25
+    ],
+    [
+      20,
+      1.5
+    ],
+    [
+      30,
+      2.0
+    ],
+    [
+      101,
+      2.5
+    ]
+  ],
+  "explanation": {
+    "idea": "价值投资：关注估值百分位，低估时买入",
+    "rules": "创业板指五年 PE 分位决定基础申购倍数；赎回现金占比决定加速系数；分位 ≥70% 触发每日 1% 高位赎回，<70% 重置；现金按年化 1.4% 计息",
+    "position": "按倍数分批申购，赎回资金进入现金池并加速回投；回测暂不计申购费、赎回费",
+    "params": "基础申购金额、每年增幅、触发赎回分位、每日赎回比例、现金利率"
+  },
+  "tunable_params": [
+    {
+      "key": "weekly_base_amount",
+      "label": "基础申购金额",
+      "default": 1000,
+      "min": 100,
+      "max": 10000,
+      "step": 100,
+      "unit": "元/周"
+    },
+    {
+      "key": "growth_rate",
+      "label": "每年增幅",
+      "default": 0.07,
+      "min": 0.0,
+      "max": 0.2,
+      "step": 0.01,
+      "unit": "0-1"
+    },
+    {
+      "key": "trigger_percentile",
+      "label": "触发赎回分位",
+      "default": 70,
+      "min": 70,
+      "max": 100,
+      "step": 1,
+      "unit": "%"
+    },
+    {
+      "key": "daily_redeem_ratio",
+      "label": "每日赎回比例",
+      "default": 0.01,
+      "min": 0.001,
+      "max": 0.05,
+      "step": 0.001,
+      "unit": "0-1"
+    },
+    {
+      "key": "cash_interest_rate",
+      "label": "现金利率",
+      "default": 0.014,
+      "min": 0.0,
+      "max": 0.05,
+      "step": 0.001,
+      "unit": "0-1"
+    }
+  ],
+  "fund_params": [
+    {
+      "key": "initial_capital",
+      "label": "初始资金",
+      "default": 50000,
+      "min": 0,
+      "max": 1000000,
+      "step": 5000,
+      "unit": "元"
+    },
+    {
+      "key": "extra_contribution_amount",
+      "label": "定期新增金额",
+      "default": 5000,
+      "min": 0,
+      "max": 100000,
+      "step": 1000,
+      "unit": "元/次"
+    },
+    {
+      "key": "extra_contribution_freq",
+      "label": "定期新增频率",
+      "default": "每月",
+      "choices": [
+        "每周",
+        "每月",
+        "每季",
+        "每年"
+      ]
+    }
+  ],
+  "version": "0.3.25"
+}
