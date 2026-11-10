@@ -1,0 +1,2 @@
+# 项目依赖（GitHub Actions 用；setup-python 的 cache:pip 也靠它做缓存键）
+akshare

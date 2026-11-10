@@ -21,7 +21,7 @@ jobs:
           cache: pip
 
       - name: 安装依赖
-        run: pip install akshare
+        run: pip install -r requirements.txt
 
       - name: 运行每日定投
         working-directory: step1-monitor-fork
