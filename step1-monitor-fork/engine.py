@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """策略核心引擎：数据加载 + 估值分位 + 状态判定 + 回测模拟（向量化）"""
 import os
+import time
 import numpy as np
 import pandas as pd
 import akshare as ak
@@ -12,17 +13,25 @@ FREQ_IDX = {f: i for i, f in enumerate(FREQS)}
 
 
 def load_price_daily(symbol):
-    px = ak.stock_zh_index_daily(symbol=symbol)[["date", "close"]]
+    # 兼容 akshare 新旧版本：
+    #   旧版(<=1.20.43): ak.stock_zh_index_daily
+    #   新版(>=1.20.44): ak.index_zh_daily_sina
+    if hasattr(ak, "stock_zh_index_daily"):
+        px = ak.stock_zh_index_daily(symbol=symbol)[["date", "close"]]
+    else:
+        px = ak.index_zh_daily_sina(symbol=symbol)[["date", "close"]]
     px["date"] = pd.to_datetime(px["date"])
     px["close"] = pd.to_numeric(px["close"], errors="coerce")
     return px.dropna().sort_values("date").reset_index(drop=True)
 
 
-def get_pe_raw(index_name, use_cache=True):
-    """拉取原始 PE(TTM) 月度数据，缓存（不同分位窗口复用同一份）"""
+def get_pe_raw(index_name, use_cache=True, ttl_hours=4):
+    """拉取原始 PE(TTM) 月度数据，带 TTL 缓存（不同分位窗口复用同一份）"""
     cache_file = os.path.join(CACHE_DIR, f"pe_{index_name}.pkl")
     if use_cache and os.path.exists(cache_file):
-        return pd.read_pickle(cache_file)
+        age_h = (time.time() - os.path.getmtime(cache_file)) / 3600
+        if age_h < ttl_hours:
+            return pd.read_pickle(cache_file)
     d = lg.get_pe_clean(lg.resolve(index_name))
     pe = d[["日期", "加权TTM_PE"]].copy()
     pe["日期"] = pd.to_datetime(pe["日期"])
@@ -31,8 +40,32 @@ def get_pe_raw(index_name, use_cache=True):
     return pe
 
 
-def load_pe_percentile(index_name, window_months=60, use_cache=True):
-    pe = get_pe_raw(index_name, use_cache).copy()
+def get_sp500_shiller_raw(use_cache=True, ttl_hours=4):
+    """标普500 席勒PE（legulegu），带 TTL 缓存"""
+    cache_file = os.path.join(CACHE_DIR, "sp500_shiller.pkl")
+    if use_cache and os.path.exists(cache_file):
+        age_h = (time.time() - os.path.getmtime(cache_file)) / 3600
+        if age_h < ttl_hours:
+            return pd.read_pickle(cache_file)
+    d = lg.get_sp500_shiller()
+    d["date"] = pd.to_datetime(d["date"])
+    d.to_pickle(cache_file)
+    return d
+
+
+def load_sp500_shiller_percentile(window_months=60, use_cache=True, ttl_hours=4):
+    """标普500 席勒PE 的滚动分位"""
+    d = get_sp500_shiller_raw(use_cache, ttl_hours).copy()
+    d["pct"] = (
+        d["shiller_pe"]
+        .rolling(window_months, min_periods=window_months)
+        .apply(lambda x: (x <= x.iloc[-1]).sum() / len(x) * 100, raw=False)
+    )
+    return d
+
+
+def load_pe_percentile(index_name, window_months=60, use_cache=True, ttl_hours=4):
+    pe = get_pe_raw(index_name, use_cache, ttl_hours).copy()
     pe["pct"] = (
         pe["加权TTM_PE"]
         .rolling(window_months, min_periods=window_months)
@@ -47,21 +80,32 @@ def build_daily(px, pe_monthly):
     return df.dropna(subset=["pct"]).reset_index(drop=True)
 
 
-def get_data(index, symbol, window=60, use_cache=True):
-    """加载市场数据（价格+分位），带本地缓存，避免反复请求 legulegu"""
+def get_data(index, symbol, window=60, use_cache=True, ttl_hours=4):
+    """加载市场数据（价格+分位），带 TTL 缓存，避免反复请求 legulegu"""
     os.makedirs(CACHE_DIR, exist_ok=True)
     cache_file = os.path.join(CACHE_DIR, f"{index}_{symbol}_{window}.pkl")
     if use_cache and os.path.exists(cache_file):
-        return pd.read_pickle(cache_file)
+        age_h = (time.time() - os.path.getmtime(cache_file)) / 3600
+        if age_h < ttl_hours:
+            return pd.read_pickle(cache_file)
     px = load_price_daily(symbol)
-    pe = load_pe_percentile(index, window)
+    pe = load_pe_percentile(index, window, ttl_hours=ttl_hours)
     df = build_daily(px, pe)
     df.to_pickle(cache_file)
     return df
 
 
+def cache_age_hours(index, symbol, window=60):
+    """返回缓存文件存在的小时数；无缓存返回 None"""
+    cache_file = os.path.join(CACHE_DIR, f"{index}_{symbol}_{window}.pkl")
+    if os.path.exists(cache_file):
+        return (time.time() - os.path.getmtime(cache_file)) / 3600
+    return None
+
+
 def execution_mask(dates, freq):
-    d = dates if isinstance(dates, pd.Series) else pd.Series(dates)
+    # 统一转成 datetime64，避免 datetime.date / datetime 混用导致 .dt 访问器失败
+    d = pd.to_datetime(pd.Series(dates)).reset_index(drop=True)
     if freq == "daily":
         return pd.Series(True, index=d.index)
     if freq == "weekly":
@@ -152,6 +196,9 @@ def simulate(df, cfg, sell_mode="B", reset_line=0.0):
                                        "shares": round(sold, 4), "proceeds": round(sold * p, 2),
                                        "pos_return": round(pos_ret * 100, 2)})
                         pos_ret = (shares * p / cost_basis - 1) if shares > 0 else np.nan
+                        # 保护：卖光或 cost_basis 归零后，不再触发后续档位
+                        if shares <= 1e-9 or cost_basis <= 1e-9:
+                            break
                     elif (not armed[j]) and pos_ret < th:
                         armed[j] = True
             elif sell_mode == "A":

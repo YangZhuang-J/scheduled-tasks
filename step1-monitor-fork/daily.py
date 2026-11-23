@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""每日运行：重算模拟定投 → 检测状态迁移 → PushPlus 通知 → 记录日志"""
+"""每日运行：重算模拟定投 → 检测状态迁移 → 说人话 →（可选）新闻解读 → PushPlus 通知"""
 import os
+import sys
 import json
 import pandas as pd
+
+# Windows 控制台默认 GBK，无法输出 emoji；统一强制 UTF-8
+try:
+    if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8":
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 import engine
 import config_loader
 import notify
+import humanize
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_PATH = os.path.join(BASE, "settings.json")
@@ -48,8 +59,10 @@ def main():
 
     state = load_json(STATE_PATH) or {"last_data_date": None}
     notify_cfg = settings.get("notify", {})
+    use_humanize = notify_cfg.get("humanize", True)
 
-    digest_lines = []
+    plain_lines = []
+    human_lines = []
     transitions = []
     log_lines = []
     latest_data_date = None
@@ -78,9 +91,10 @@ def main():
 
         pct_last = float(df["pct"].iloc[-1])
         cur_bucket = bucket_idx(pct_last, cfg["buy_states"])
+        cur_state = cfg["buy_states"][cur_bucket]
         cur_label = labels[cur_bucket]
 
-        # 状态迁移（最近两个交易日对比）
+        # 状态迁移
         if len(df) >= 2 and notify_cfg.get("on_transition", True):
             prev_bucket = bucket_idx(float(df["pct"].iloc[-2]), cfg["buy_states"])
             if prev_bucket != cur_bucket:
@@ -102,11 +116,20 @@ def main():
         p_last = float(df["close"].iloc[-1])
         val = res["shares"] * p_last + res["cash"]
         prof = (val / res["invested"] - 1) * 100 if res["invested"] > 0 else 0.0
+        n_buys = sum(1 for x in res["trades"] if x["action"] == "buy")
 
-        digest_lines.append(
+        # 简洁版
+        plain_lines.append(
             f"**{idx}**：分位 {pct_last:.0f}%（{cur_label}）｜{act}｜"
             f"累计投入 {fmt(res['invested'])}｜当前总值 {fmt(val)}｜盈亏 {prof:+.1f}%"
         )
+
+        # 说人话版
+        item = {
+            "index": idx, "pct": pct_last, "state": cur_state,
+            "invested": res["invested"], "value": val, "profit": prof, "n_buys": n_buys,
+        }
+        human_lines.append(humanize.render(item))
 
         for x in today_trades:
             log_lines.append(json.dumps({
@@ -115,7 +138,7 @@ def main():
                 "shares": x.get("shares"), "rung": x.get("rung"),
             }, ensure_ascii=False))
 
-    # 数据没更新（节假日/非交易日）→ 不推送
+    # 数据没更新 → 不推送
     if latest_data_date is None:
         print("所有标的都还没有开始日期之后的数据，等待首个交易日")
         return
@@ -123,16 +146,20 @@ def main():
         print(f"数据未更新（截至 {latest_data_date.date()}），跳过推送")
         return
 
-    # 组装消息
+    # ---------- 组装消息 ----------
     title_parts = []
     content = []
+
     for idx, old, new in transitions:
         title_parts.append(f"{idx} {old}→{new}")
-        content.append(f"🔔 **{idx}** 状态迁移：{old} → **{new}**")
+        content.append(f"## 🔔 {idx} 状态变化：{old} → **{new}**\n\n档位变了，定投节奏也跟着变了。看下面今天的安排。")
+
     if notify_cfg.get("daily_digest", True):
         title_parts.append("定投日报")
-        content.append("📊 每日摘要：")
-        content.extend(digest_lines)
+        if use_humanize and human_lines:
+            content.append("# 📊 今天的定投安排\n\n" + "\n\n---\n\n".join(human_lines))
+        else:
+            content.append("## 📊 每日摘要\n\n" + "\n\n".join(plain_lines))
 
     title = " ".join(title_parts) if title_parts else "定投日报"
     body = "\n\n".join(content)
@@ -153,6 +180,7 @@ def main():
     else:
         print("未设置 PUSHPLUS_TOKEN，本地预览：")
         print("标题:", title)
+        print("---")
         print(body)
 
 
